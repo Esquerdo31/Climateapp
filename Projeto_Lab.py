@@ -23,6 +23,7 @@ def analise_dados_action():
 def alertas_desastres_action():
     print("Botao Alertas de Desastres Naturais pressionado")
 
+
 # Cria a janela principal
 root = tk.Tk()
 root.title("Informacoes Meteorologicas")
