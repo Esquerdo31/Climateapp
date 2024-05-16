@@ -1,17 +1,23 @@
 # Climateapp
 
-Este projeto foi desenvolvido no ‚mbito da cadeira de LaboratÛrio de ProgramaÁ„o, do curso de Engenharia Inform·tica da Universidade de Tr·s-os-Montes e Alto Douro.
+Este projeto foi desenvolvido no √¢mbito da cadeira de Laborat√≥rio de Programa√ß√£o, do curso de Engenharia Inform√°tica da Universidade de Tr√°s-os-Montes e Alto Douro.
+
+Seguimos diversas etapas para nos orientarmos e desta forma termos uma maneira de trabalho mais fluida! Os checkpoints seguidos foram:
+
+- 1. Recolha de Dados
+- 2. An√°lise de Dados:
+- 3. Alerta de Desastres Naturais:
+- 4. Interface de Utilizador:
+- 5. Hist√≥rico de Dados:
+- 6. Integra√ß√£o de Notifica√ß√µes:
 
 
 
 
 
 
-
-
-
-Contamos com a colaboraÁ„o de:
-- [Hugo Costa]
-- [Bruno Sousa]
-- [Lucas Cerqueira]
-- [Gustavo Costa]
+Feito atrav√©s da colabora√ß√£o de:
+# - [Hugo Costa]
+# - [Bruno Sousa]
+# - [Lucas Cerqueira]
+# - [Gustavo Costa]
