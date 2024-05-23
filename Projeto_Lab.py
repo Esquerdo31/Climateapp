@@ -309,6 +309,29 @@ def mostrar_detalhes(dia):
     """
     ctk.CTkLabel(detalhes_janela, text=detalhes_texto, justify=tk.LEFT).pack(pady=10)
 
+def create_image():
+    # Create an image with PIL
+    width = 64
+    height = 64
+    image = Image.new('RGB', (width, height), (255, 255, 255))
+    dc = ImageDraw.Draw(image)
+    dc.rectangle((width // 2, 0, width, height // 2), fill='black')
+    dc.rectangle((0, height // 2, width // 2, height), fill='black')
+    return image
+
+def on_quit(icon, item):
+    icon.stop()
+    if root is not None:
+        root.destroy()
+
+def open_main_window():
+    global root
+    root.deiconify()
+
+def minimize_to_tray():
+    global icon
+    root.withdraw()
+    icon.run()
 
 root = ctk.CTk()
 root.title("Informações Meteorológicas")
@@ -324,25 +347,25 @@ country_list = ['BR', 'US', 'PT', 'ES', 'FR', 'DE', 'IT']
 fetch_initial_location()
 
 # Container for buttons
-button_frame = ctk.CTkFrame(root,fg_color="transparent")
+button_frame = ctk.CTkFrame(root, fg_color="transparent")
 button_frame.pack(side=tk.TOP, pady=10)
 
 btn_localidade = ctk.CTkButton(button_frame, text="Definir Localidade", command=set_localidade)
-btn_localidade.pack(side=tk.TOP,pady=10)
+btn_localidade.pack(side=tk.TOP, pady=10)
 
 btn_temperatura = ctk.CTkButton(button_frame, text="Temperatura", command=temperatura_action)
-btn_temperatura.pack(side=tk.LEFT,padx=5)
+btn_temperatura.pack(side=tk.LEFT, padx=5)
 
 btn_humidade = ctk.CTkButton(button_frame, text="Humidade", command=get_humidade)
-btn_humidade.pack(side=tk.LEFT,padx=5)
+btn_humidade.pack(side=tk.LEFT, padx=5)
 
 btn_vv = ctk.CTkButton(button_frame, text="Velocidade do Vento", command=get_velocidade)
-btn_vv.pack(side=tk.LEFT,padx=5)
+btn_vv.pack(side=tk.LEFT, padx=5)
 
 btn_show_graph = ctk.CTkButton(root, text="Mostrar Gráfico de Temperaturas", command=show_temperature_graph)
 btn_show_graph.pack(pady=10)
 
-btn_prev= ctk.CTkButton(root, text="Previsão de Temperatura", command=previsao_temperatura)
+btn_prev = ctk.CTkButton(root, text="Previsão de Temperatura", command=previsao_temperatura)
 btn_prev.pack(pady=10)
 
 label_localidade = ctk.CTkLabel(root, textvariable=localidade_var, fg_color="blue")
@@ -351,8 +374,30 @@ label_localidade.pack(side=tk.TOP, anchor=tk.N)
 label_resultado = ctk.CTkLabel(root, textvariable=resultado_var)
 label_resultado.pack(side=tk.TOP, anchor=tk.N, pady=20)
 
-btn_aviso= ctk.CTkButton(root, text="⚠️Avisar desastres!⚠️", command=lambda: messagebox.showinfo("Aviso", "Aviso de teste"),fg_color="red")
+btn_aviso = ctk.CTkButton(root, text="⚠️Avisar desastres!⚠️", command=lambda: messagebox.showinfo("Aviso", "Aviso de teste"), fg_color="red")
 btn_aviso.pack(side=ctk.BOTTOM, anchor=tk.SE, pady=20, padx=10)
 
+def on_close():
+    if messagebox.askokcancel("Quit", "Do you want to minimize to tray instead of quitting?"):
+        root.withdraw()
+        global icon
+        icon = pystray.Icon("test_icon", create_image(), "Background Script", menu=pystray.Menu(
+            item('Open', lambda icon, item: open_main_window()),
+            item('Quit', on_quit)
+        ))
+        threading.Thread(target=minimize_to_tray, daemon=True).start()
+    else:
+        root.destroy()
+
+root.protocol("WM_DELETE_WINDOW", on_close)
+
+def main_task():
+    while True:
+        print("Script is running in the background...")
+        time.sleep(5)
+
+# Run the main task in a separate thread
+task_thread = threading.Thread(target=main_task, daemon=True)
+task_thread.start()
 
 root.mainloop()
