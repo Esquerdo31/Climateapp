@@ -1,4 +1,5 @@
 ﻿from ast import NotEq, Param
+from calendar import c
 from ctypes.wintypes import SIZE
 import tkinter as tk
 from tkinter import ANCHOR, simpledialog, messagebox, ttk
@@ -27,6 +28,8 @@ from winotify import Notification, audio
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+import folium
+import tkintermapview
 
 
 API_KEY_WEATHER = '6de9d4c574f54850af113b86005202b2'  # Chave da API do Weatherbit
@@ -149,7 +152,7 @@ def fetch_temperature_data():
         lat, lon = coordenadas
 
         start_date = (datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d')
-        end_date = datetime.now().strftime('%Y-%m-%d')
+        end_date = (datetime.now()- timedelta(days=1)).strftime('%Y-%m-%d') 
 
         url = "https://archive-api.open-meteo.com/v1/archive"
         params = {
@@ -393,7 +396,6 @@ def usar_email_selecionado():
     else:
          messagebox.showinfo("Informação", "Nenhum e-mail selecionado.")
     
-
 def agendar_checagem():
     usar_email_selecionado()
     root.after(30000, agendar_checagem)  # 300000 milissegundos = 5 minutos
@@ -482,10 +484,33 @@ def minimize_to_tray():
     ))
     icon.run()
 
+def mapa():
+    api_key_op= '46effc38253ccbfe1327746b4cbb41ef'
+    full_localidade = localidade_var.get().split(': ')[1]
+    if full_localidade and full_localidade != "Nenhuma":
+        cidade, pais = full_localidade.split(' - ')
+        url = f"https://api.weatherbit.io/v2.0/current?city={cidade}&country={pais}&key={API_KEY_WEATHER}"
+        response = requests.get(url)
+        if response.status_code == 200:
+            data = response.json()
+            if 'data' in data and len(data['data']) > 0:
+                humidade = data['data'][0]['rh']
+                cidade = data['data'][0]['city_name']
+                lat = data['data'][0]['lat']
+                lon = data['data'][0]['lon']
+                map_widget = tkintermapview.TkinterMapView(root, width=400, height=300)
+                map_widget.place(relx=0.5, rely=0.6, anchor=tk.CENTER)
+                map_widget.set_position(lat,lon)
+                map_widget.set_zoom(15)
+            else:
+                resultado_var.set("Nenhum dado de humidade disponível para esta localidade.")
+        else:
+            resultado_var.set(f"Erro ao buscar dados da API: {response.status_code}")
+    
 
 root = ctk.CTk()
 root.title("Informações Meteorológicas")
-root.geometry("500x400")
+root.geometry("600x700")
 
 # Defina o ícone da janela principal
 
@@ -502,7 +527,10 @@ resultado_var = tk.StringVar(root)
 # Lista de códigos de país para o exemplo, use uma lista completa conforme necessário
 country_list = ['BR', 'US', 'PT', 'ES', 'FR', 'DE', 'IT']
 
+
 fetch_initial_location()
+
+
 
 # Container for buttons
 button_frame = ctk.CTkFrame(root, fg_color="transparent")
@@ -530,13 +558,17 @@ label_localidade = ctk.CTkLabel(root, textvariable=localidade_var, fg_color="blu
 label_localidade.pack(side=tk.TOP, anchor=tk.N)
 
 label_resultado = ctk.CTkLabel(root, textvariable=resultado_var)
-label_resultado.pack(side=tk.TOP, anchor=tk.N, pady=20)
+label_resultado.pack(side=tk.TOP, anchor=tk.N, pady=20,padx=20)
 
 btn_aviso = ctk.CTkButton(root, text="⚠️Avisar desastres!⚠️", command=usar_email_selecionado, fg_color="red")
-btn_aviso.pack(side=ctk.BOTTOM, anchor=tk.SE, pady=20, padx=10)
+btn_aviso.pack(side=ctk.BOTTOM, anchor=tk.SE, pady=10, padx=10)
 
 btn_email= ctk.CTkButton(root, text="Inserir email",command= emailconfirma,fg_color="green")
 btn_email.pack(side=tk.BOTTOM, anchor=tk.SE, pady=10, padx=10)
+
+
+btn_mapa= ctk.CTkButton(root, text="Abrir Mapa",command= mapa,fg_color="green")
+btn_mapa.pack(side=tk.BOTTOM, anchor=tk.SE, pady=10, padx=10)
 
 def on_close():
     if messagebox.askokcancel("Quit", "Do you want to minimize to tray instead of quitting?"):
@@ -553,7 +585,7 @@ root.protocol("WM_DELETE_WINDOW", on_close)
 def main_task():
     while True:
         print("Script is running in the background...")
-        time.sleep(5)
+        time.sleep(10)
 
 
 # Run the main task in a separate thread
