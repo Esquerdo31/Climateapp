@@ -35,29 +35,33 @@ from pathlib import Path
 import locale
 
 
+# Definindo as chaves de API e configurações globais
 API_KEY_WEATHER = '6de9d4c574f54850af113b86005202b2'
 API_KEY_GEO = 'cc88a6dd1b8de7'
 EMAIL_FILE = 'emails.txt'
 locale.setlocale(locale.LC_TIME, 'pt_PT')
 
+# Variáveis globais
 loc = "Localidade: Nenhuma"
 selected_email = ""
 warning = 0
 checking_disasters = False
 buttons = []
 detail_labels = []
-map_widget = None  # Global map widget reference
+map_widget = None  # Referência global para o widget do mapa
 selected_day_data = None
-# Definir variáveis globais para armazenar labels e botões persistentes
+
+# Variáveis para armazenar labels e botões persistentes
 icon_label = None
 icon_button = None
 day_label = None
-# Setup the Open-Meteo API client with cache and retry on error
+
+# Configuração da API Open-Meteo com cache e tentativa de repetição em caso de erro
 cache_session = requests_cache.CachedSession('.cache', expire_after = 3600)
 retry_session = retry(cache_session, retries = 5, backoff_factor = 0.2)
 openmeteo = openmeteo_requests.Client(session = retry_session)
 
-
+# Função para buscar a localização inicial do usuário com base no IP
 def fetch_initial_location():
     try:
         response = requests.get(f"https://ipinfo.io?token={API_KEY_GEO}")
@@ -73,7 +77,8 @@ def fetch_initial_location():
             print("Não foi possível obter a localização inicial.")
     except Exception as e:
         print(f"Erro ao buscar localização inicial: {e}")
-  
+
+# Função para definir a localidade através de uma janela de entrada
 def set_localidade():
     localidade_window = ctk.CTkToplevel(root)
     localidade_window.title("Definir Localidade")
@@ -99,6 +104,7 @@ def set_localidade():
     confirm_button = ctk.CTkButton(localidade_window, text="Confirmar", command=confirm_action)
     confirm_button.pack()
 
+# Função para carregar os e-mails salvos
 def load_emails():
     if not os.path.exists(EMAIL_FILE):
         return []
@@ -106,18 +112,20 @@ def load_emails():
         emails = [line.strip() for line in file.readlines()]
     return emails
 
+# Função para salvar um novo e-mail
 def save_email(new_email):
     with open(EMAIL_FILE, 'a') as file:
         file.write(new_email + '\n')
 
+# Função para selecionar um dia específico na interface
 def selecionar_dia(dia, img_path, day_of_week):
-    
     global selected_day_data, tempmax_var, tempmin_var, icon_button, day_label
     selected_day_data = (dia, img_path, day_of_week)
     tempmax_var.set(f"Max: {dia['max_temp']}°C")
     tempmin_var.set(f"Min: {dia['min_temp']}°C")
     mostraricon(selected_day_data)
 
+# Função para mostrar detalhes do dia selecionado
 def mostrar_detalhes():
     global selected_day_data
     if selected_day_data:
@@ -138,14 +146,15 @@ def mostrar_detalhes():
         """
         ctk.CTkLabel(detalhes_janelaframe, text=detalhes_texto, font=("Poppins Regular", 14), text_color="black", bg_color="#FFFFFF", justify=tk.LEFT).pack(pady=10)
         detail_labels.append(detalhes_janelaframe)
-    
+
+# Função para ocultar os detalhes do dia selecionado
 def ocultar_detalhes():
     global detail_labels
-    # Ocultar apenas os detalhes adicionais, mantendo ícone e temperaturas
     for label in detail_labels:
         label.destroy()
-    detail_labels.clear()  # Limpar a lista de labels de detalhes adicionais
+    detail_labels.clear()
 
+# Função para mapear códigos meteorológicos para imagens
 def map_weather_codes_to_images():
     # Defina o caminho base absoluto para o diretório de ícones
     base_dir = r'C:\Users\costi\Desktop\Uni\Cadeiras2semestre1ano\lab\Trabalho2\icons'
@@ -209,6 +218,7 @@ def map_weather_codes_to_images():
     }
     return weather_codes_to_images
 
+# Função para criar os botões dos dias com base na localidade
 def butoesfunction():
     global buttons, butoesinteiros, selected_day_data, detail_labels
     
@@ -351,6 +361,7 @@ def butoesfunction():
             error_label.pack()
             detail_labels.append(error_label)
 
+# Função para mostrar o ícone e o dia selecionado
 def mostraricon(selected_day_data):
     global icon_button, day_label
     dia, img_path, day_of_week = selected_day_data
@@ -377,6 +388,7 @@ def mostraricon(selected_day_data):
     icon_button.place(x=557.0, y=124.0)
     icon_button.image = img  # Manter referência para evitar coleta de lixo
 
+# Função para confirmar o e-mail
 def emailconfirma():
     global selected_email
     emails = load_emails()
@@ -411,6 +423,7 @@ def emailconfirma():
 
     choose_email()
 
+# Função para usar o e-mail selecionado
 def usar_email_selecionado():
     global selected_email
     global warning
@@ -428,6 +441,7 @@ def usar_email_selecionado():
     else:
         messagebox.showinfo("Informação", "Nenhum e-mail selecionado.")
 
+# Função para verificar desastres meteorológicos periodicamente
 def check_disasters():
     global checking_disasters
     while checking_disasters:
@@ -435,6 +449,7 @@ def check_disasters():
             send_notification(selected_email)
         time.sleep(60)
 
+# Função para enviar notificações
 def send_notification(to_email):
     full_localidade = localidade_var.get().split(': ')[1]
     if full_localidade and full_localidade != "Nenhuma":
@@ -470,6 +485,7 @@ def send_notification(to_email):
                         timeout=10  # Tempo em segundos para a notificação desaparecer
                     )                  
 
+# Função para enviar e-mails
 def send_email(subject, body, to_email):
     from_email = "contadeavisos@gmail.com"
     from_password = "wiwz wnwm ieeu tsuq"
@@ -494,11 +510,13 @@ def send_email(subject, body, to_email):
     except Exception as e:
         print(f"Erro ao enviar e-mail: {str(e)}")
 
+# Função para criar a imagem do ícone
 def create_image():
     icon_path = "iconmestre.png"
     image = Image.open(icon_path)
     return image
 
+# Função para fechar o aplicativo
 def on_quit(icon, item):
     global checking_disasters
     checking_disasters = False
@@ -506,10 +524,12 @@ def on_quit(icon, item):
     root.quit()
     root.destroy()
 
+# Função para abrir a janela principal
 def open_main_window(icon, item):
     root.after(0, root.deiconify)
     icon.stop()
 
+# Função para minimizar a aplicação para a bandeja do sistema
 def minimize_to_tray():
     global icon
     icon = pystray.Icon("iconmestre.ico", create_image(), "Climate APP", menu=pystray.Menu(
@@ -518,6 +538,7 @@ def minimize_to_tray():
     ))
     threading.Thread(target=icon.run, daemon=True).start()
 
+#Função para exibir o mapa
 def mapa():
     global map_widget
     try:
@@ -549,12 +570,14 @@ def mapa():
     except Exception as e:
         resultado_var.set(f"Ocorreu um erro ao tentar exibir o mapa: {e}")
 
+# Função para destruir o mapa
 def destruir_mapa():
     global map_widget
     if map_widget:
         map_widget.destroy()
         map_widget = None
-        
+
+# Função para plotar gráficos de temperatura, umidade e velocidade do vento        
 def plot_graphs(times, temps, humidities, wind_speeds):
     fig, axs = plt.subplots(3, 1, figsize=(10, 6))  # Ajuste a altura da figura para 6
 
@@ -591,6 +614,7 @@ def plot_graphs(times, temps, humidities, wind_speeds):
     plt.tight_layout()
     plt.show()
 
+# Função para analisar os dados meteorológicos
 def analyze_data():
     global selected_day_data
     if selected_day_data:
@@ -629,10 +653,12 @@ def analyze_data():
                 print("Nenhum dado de localização disponível para esta localidade.")
         else:
             print(f"Erro ao buscar dados da API Weatherbit: {response.status_code}")
-   
+ 
+# Função para obter o caminho relativo dos assets           
 def relative_to_assets(path: str) -> Path:
     return ASSETS_PATH / Path(path)
 
+ #Função para salvar os dados meteorológicos em um arquivo
 def save_data():
     global selected_day_data
     if selected_day_data:
@@ -650,7 +676,8 @@ def save_data():
             file.write(f"Humidade: {dia['rh']}%\n")
             file.write("\n")  # Adiciona uma linha em branco entre registros
         print(f"Dados salvos em weather_data.txt")
-
+        
+# Função para carregar os dados meteorológicos de um arquivo
 def load_data():
     if os.path.exists("weather_data.txt"):
         with open("weather_data.txt", 'r') as file:
@@ -659,6 +686,7 @@ def load_data():
     else:
         print(f"Arquivo weather_data.txt não encontrado.")
 
+# Função para exibir os dados meteorológicos em uma janela
 def show_data(data):
     data_window = ctk.CTkToplevel(root)
     data_window.title("Dados do Tempo Salvos")
@@ -669,7 +697,7 @@ def show_data(data):
     text_widget.insert(END, data)
 
 
-
+# Inicialização da interface principal
 root = ctk.CTk()
 root.title("Informações Meteorológicas")
 root.geometry("800x600")
@@ -752,6 +780,7 @@ canvas.create_rectangle(
     outline=""
 )
 
+# Botão de busca de localidade
 lupa_image_1 = PhotoImage(
     file=relative_to_assets("button_1.png"))
 lupa_1 = ctk.CTkButton(
@@ -780,7 +809,7 @@ canvas.create_text(
     font=("Poppins Regular", 24 * -1)
 )
 
-
+# Botões de email
 email_image_9 = PhotoImage(
     file=relative_to_assets("button_9.png"))
 email_9 = Button(
@@ -797,6 +826,7 @@ email_9.place(
     width=126.0,
     height=28.0
 )
+
 
 button_image_10 = PhotoImage(
     file=relative_to_assets("button_10.png"))
@@ -815,7 +845,7 @@ button_10.place(
     height=28.0
 )
 
-
+# Botões para abrir e fechar o mapa
 abrirmapa_image_11 = PhotoImage(
     file=relative_to_assets("button_11.png"))
 abrirmapa_11 = Button(
@@ -850,6 +880,7 @@ fecharmapa_12.place(
     height=30.0
 )
 
+# Botões para mostrar e ocultar detalhes
 detalhes_image_13 = PhotoImage(
     file=relative_to_assets("button_13.png"))
 detalhes_13 = Button(
@@ -885,6 +916,7 @@ ocultar_button.place(
     y=450.0
 )
 
+# Botões para salvar e carregar dados
 salvardata_image_14 = PhotoImage(
     file=relative_to_assets("button_14.png"))
 salvardata_14 = Button(
@@ -919,14 +951,16 @@ abridata_15.place(
     height=35.0
 )
 
+# Botão para analisar dados
 analyze_button = ctk.CTkButton(root, text="Analisar Dados", command=analyze_data,width=210, height=35, bg_color="#D9D9D9", fg_color="#37A376", font=("Poppins Regular", 14),corner_radius=25)
 analyze_button.place(x=557, y=500)
 
+# Labels para mostrar a localidade
 label_localidade = ctk.CTkLabel(root,textvariable=localidade_var,bg_color="#4DB1C7",fg_color="#4DB1C7",font=("Poppins Regular",15))
 label_localidade.pack(side=tk.LEFT, anchor=tk.N,pady=20,padx=20)
 label_localidade.place(x=500.0,y=20.0)
 
-
+#Função para fechar aplicação ou minimizar para bandeja do sistema
 def on_close():
     if messagebox.askokcancel("Fechar", "Minimizar invés de fechar totalmente?"):
         root.withdraw()
@@ -939,6 +973,7 @@ def on_close():
 
 root.protocol("WM_DELETE_WINDOW", on_close)
 
+# Função para a tarefa principal que roda em segundo plano
 def main_task():
     while True:
         print("Ainda estou a trabalhar no background")
