@@ -710,7 +710,7 @@ photo = ImageTk.PhotoImage(img)
 root.iconphoto(True, photo)
 root.iconbitmap("iconmestre.ico")
 OUTPUT_PATH = Path(__file__).parent
-ASSETS_PATH = OUTPUT_PATH / Path(r"C:\Users\costi\Desktop\Uni\Cadeiras2semestre1ano\lab\Trabalho2\build\assets\frame0")
+ASSETS_PATH = OUTPUT_PATH / Path("frame0")
 
 cor_var = tk.StringVar(root, "Latitude: Nenhuma - Longitude: Nenhuma")
 localidade_var = tk.StringVar(root, "Localidade: Nenhuma")
