@@ -2,10 +2,10 @@
 from calendar import c
 from ctypes.wintypes import SIZE
 import tkinter as tk
-from tkinter import ANCHOR, NE, W, simpledialog, messagebox, ttk, Canvas, PhotoImage, Button
+from tkinter import ANCHOR, NE, W, simpledialog, messagebox, ttk, Canvas, PhotoImage, Button, Text, END
 from tkinter.font import BOLD, Font
 from token import NOTEQUAL
-from turtle import title
+from turtle import title, width
 import requests
 import openmeteo_requests
 import requests_cache
@@ -19,12 +19,13 @@ from datetime import datetime
 from tkinter import font
 import customtkinter as ctk
 from PIL import Image, ImageTk, ImageDraw
+from plyer import notification
 import os
 import pystray
 from pystray import MenuItem as item
 import threading
 import time
-from winotify import Notification, audio
+#from winotify import Notification, audio: Parou de funcionar devido ao ultimo update do windows
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -32,6 +33,7 @@ import folium
 import tkintermapview
 from pathlib import Path
 import locale
+
 
 API_KEY_WEATHER = '6de9d4c574f54850af113b86005202b2'
 API_KEY_GEO = 'cc88a6dd1b8de7'
@@ -50,6 +52,10 @@ selected_day_data = None
 icon_label = None
 icon_button = None
 day_label = None
+# Setup the Open-Meteo API client with cache and retry on error
+cache_session = requests_cache.CachedSession('.cache', expire_after = 3600)
+retry_session = retry(cache_session, retries = 5, backoff_factor = 0.2)
+openmeteo = openmeteo_requests.Client(session = retry_session)
 
 
 def fetch_initial_location():
@@ -93,57 +99,6 @@ def set_localidade():
     confirm_button = ctk.CTkButton(localidade_window, text="Confirmar", command=confirm_action)
     confirm_button.pack()
 
-def temperatura_action():
-    full_localidade = localidade_var.get().split(': ')[1]
-    if full_localidade and full_localidade != "Nenhuma":
-        cidade, pais = full_localidade.split(' - ')
-        url = f"https://api.weatherbit.io/v2.0/current?city={cidade}&country={pais}&key={API_KEY_WEATHER}"
-        response = requests.get(url)
-        if response.status_code == 200:
-            data = response.json()
-            if 'data' in data and len(data['data']) > 0:
-                temperatura = data['data'][0]['temp']
-                cidade = data['data'][0]['city_name']
-                resultado_var.set(f"Temperatura em {cidade}, {pais}: {temperatura}ºC")
-            else:
-                resultado_var.set("Nenhum dado de temperatura disponível para esta localidade.")
-        else:
-            resultado_var.set(f"Erro ao buscar dados da API: {response.status_code}")
-
-def get_velocidade():
-    full_localidade = localidade_var.get().split(': ')[1]
-    if full_localidade and full_localidade != "Nenhuma":
-        cidade, pais = full_localidade.split(' - ')
-        url = f"https://api.weatherbit.io/v2.0/current?city={cidade}&country={pais}&key={API_KEY_WEATHER}"
-        response = requests.get(url)
-        if response.status_code == 200:
-            data = response.json()
-            if 'data' in data and len(data['data']) > 0:
-                velocidade = data['data'][0]['wind_spd']
-                cidade = data['data'][0]['city_name']
-                resultado_var.set(f"Velocidade do vento em {cidade}, {pais}: {velocidade}m/s")
-            else:
-                resultado_var.set("Nenhum dado de velocidade disponível para esta localidade.")
-        else:
-            resultado_var.set(f"Erro ao buscar dados da API: {response.status_code}")
-
-def get_humidade():
-    full_localidade = localidade_var.get().split(': ')[1]
-    if full_localidade and full_localidade != "Nenhuma":
-        cidade, pais = full_localidade.split(' - ')
-        url = f"https://api.weatherbit.io/v2.0/current?city={cidade}&country={pais}&key={API_KEY_WEATHER}"
-        response = requests.get(url)
-        if response.status_code == 200:
-            data = response.json()
-            if 'data' in data and len(data['data']) > 0:
-                humidade = data['data'][0]['rh']
-                cidade = data['data'][0]['city_name']
-                resultado_var.set(f"Humidade em {cidade}, {pais}: {humidade}%")
-            else:
-                resultado_var.set("Nenhum dado de humidade disponível para esta localidade.")
-        else:
-            resultado_var.set(f"Erro ao buscar dados da API: {response.status_code}")
-
 def load_emails():
     if not os.path.exists(EMAIL_FILE):
         return []
@@ -155,56 +110,13 @@ def save_email(new_email):
     with open(EMAIL_FILE, 'a') as file:
         file.write(new_email + '\n')
 
-def fetch_temperature_data():
-    try:
-        coordenadas = cor_var.get().replace("Latitude: ", "").replace("Longitude: ", "").split(" - ")
-        if len(coordenadas) != 2:
-            raise ValueError("Formato de coordenadas inválido. Esperado: 'Latitude: X - Longitude: Y'")
-
-        lat, lon = coordenadas
-
-        start_date = (datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d')
-        end_date = (datetime.now()- timedelta(days=1)).strftime('%Y-%m-%d') 
-
-        url = "https://archive-api.open-meteo.com/v1/archive"
-        params = {
-            "latitude": lat,
-            "longitude": lon,
-            "start_date": start_date,
-            "end_date": end_date,
-            "hourly": "temperature_2m"
-        }
-
-        response = requests.get(url, params=params)
-        print("URL da API:", response.url)  # Verificar a URL completa com parâmetros
-        print("Status Code:", response.status_code)
-        print("Resposta da API:", response.text)  # Imprimir a resposta completa da API
-
-        if response.status_code == 200:
-            if response.text.strip() == "":
-                raise ValueError("Resposta da API está vazia")
-            try:
-                data = response.json()
-                if 'hourly' not in data or 'temperature_2m' not in data['hourly'] or 'time' not in data['hourly']:
-                    raise ValueError("Estrutura esperada não encontrada no JSON")
-
-                temperatures = data['hourly']['temperature_2m']
-                dates = [datetime.strptime(day, "%Y-%m-%dT%H:%M") for day in data['hourly']['time']]
-                return dates, temperatures
-            except ValueError as ve:
-                raise Exception(f"Erro ao processar JSON: {ve}")
-        else:
-            raise Exception(f"Falha ao buscar dados da API: Status {response.status_code}")
-    except Exception as e:
-        print("Erro ao buscar dados da API:", e)
-        raise
-
 def selecionar_dia(dia, img_path, day_of_week):
+    
     global selected_day_data, tempmax_var, tempmin_var, icon_button, day_label
     selected_day_data = (dia, img_path, day_of_week)
     tempmax_var.set(f"Max: {dia['max_temp']}°C")
     tempmin_var.set(f"Min: {dia['min_temp']}°C")
-    atualizar_resumo(selected_day_data)
+    mostraricon(selected_day_data)
 
 def mostrar_detalhes():
     global selected_day_data
@@ -439,7 +351,7 @@ def butoesfunction():
             error_label.pack()
             detail_labels.append(error_label)
 
-def atualizar_resumo(selected_day_data):
+def mostraricon(selected_day_data):
     global icon_button, day_label
     dia, img_path, day_of_week = selected_day_data
     # Manter os ícones e as temperaturas ao atualizar
@@ -451,6 +363,10 @@ def atualizar_resumo(selected_day_data):
         day_label.destroy()
     day_label = ctk.CTkLabel(root, text=day_of_week, width=116, height=16, text_color="black", bg_color="#D9D9D9")
     day_label.place(x=601, y=101)
+    tempmax_label= ctk.CTkLabel(root, textvariable=tempmax_var, width=116, height=16, text_color="black",font=("Poppins Regular",15), bg_color="#D9D9D9")
+    tempmax_label.place(x=530, y=350)
+    tempmin_label= ctk.CTkLabel(root, textvariable=tempmin_var, width=116, height=16, text_color="black",font=("Poppins Regular",15), bg_color="#D9D9D9")
+    tempmin_label.place(x=650, y=350)
     
     img = Image.open(img_path)
     img = img.resize((159, 144), Image.LANCZOS)  # Ajuste o tamanho conforme necessário
@@ -460,21 +376,6 @@ def atualizar_resumo(selected_day_data):
     icon_button = ctk.CTkButton(root, text="", image=img, bg_color="transparent", width=204, height=215, border_width=0, state="disabled")
     icon_button.place(x=557.0, y=124.0)
     icon_button.image = img  # Manter referência para evitar coleta de lixo
-
-def show_temperature_graph():
-    try:
-        dates, temperatures = fetch_temperature_data()
-        plt.figure(figsize=(10, 5))
-        plt.plot(dates, temperatures, marker='o')
-        plt.title('Temperatura Máxima Diária (Últimos 7 dias)')
-        plt.xlabel('Data')
-        plt.ylabel('Temperatura (°C)')
-        plt.grid(True)
-        plt.xticks(rotation=45)
-        plt.tight_layout()
-        plt.show()
-    except Exception as e:
-        messagebox.showerror("Erro", str(e))
 
 def emailconfirma():
     global selected_email
@@ -550,16 +451,24 @@ def send_notification(to_email):
                     subject = f"Alerta Meteorológico: {alertatit}"
                     body = f"Título: {alertatit}\n\nDescrição: {alertadesc}"
                     send_email(subject, body, to_email)
-                    notif = Notification(app_id="Aplicação Meteorológica", title="Aviso de Desastres", msg=alerta, duration="short", icon=icon_path)
-                    notif.set_audio(audio.Default, loop=False)
-                    notif.add_actions(label="Alerta Detectado!", launch="https://gmail.com/")
-                    notif.show()
-                else:
-                    print("Nenhum alerta relevante encontrado.")
-            else:
-                print("Nenhum alerta disponível para esta localidade.")
-        else:
-            print(f"Erro ao buscar dados da API: {response.status_code}")
+
+                    # Verifique se o ícone do aplicativo está definido corretamente
+                    icon_path = "iconmestre.ico"  # Caminho para o ícone
+
+                    # Verifique se o caminho do ícone é válido
+                    if not os.path.exists(icon_path):
+                        print(f"Caminho do ícone inválido. A notificação não será exibida.")
+                        return
+
+                    # Crie a notificação
+                    print(f"Enviar notificação")
+                    notification.notify(
+                        app_name="Aplicação Meteorológica",
+                        title="Aviso de Desastres",
+                        message=alertatit,
+                        app_icon=icon_path,
+                        timeout=10  # Tempo em segundos para a notificação desaparecer
+                    )                  
 
 def send_email(subject, body, to_email):
     from_email = "contadeavisos@gmail.com"
@@ -603,46 +512,163 @@ def open_main_window(icon, item):
 
 def minimize_to_tray():
     global icon
-    icon = pystray.Icon("test_icon", create_image(), "Climate APP", menu=pystray.Menu(
+    icon = pystray.Icon("iconmestre.ico", create_image(), "Climate APP", menu=pystray.Menu(
         item('Abrir', open_main_window),
         item('Fechar', on_quit)
     ))
-    icon.run()
+    threading.Thread(target=icon.run, daemon=True).start()
 
 def mapa():
     global map_widget
-    if map_widget is not None:
-        map_widget.destroy()
-    api_key_op = '46effc38253ccbfe1327746b4cbb41ef'
-    full_localidade = localidade_var.get().split(': ')[1]
-    if full_localidade and full_localidade != "Nenhuma":
-        cidade, pais = full_localidade.split(' - ')
-        url = f"https://api.weatherbit.io/v2.0/current?city={cidade}&country={pais}&key={API_KEY_WEATHER}"
-        response = requests.get(url)
-        if response.status_code == 200:
-            data = response.json()
-            if 'data' in data and len(data['data']) > 0:
-                humidade = data['data'][0]['rh']
-                cidade = data['data'][0]['city_name']
-                lat = data['data'][0]['lat']
-                lon = data['data'][0]['lon']
-                map_widget = tkintermapview.TkinterMapView(root, width=257, height=247)
-                map_widget.place(x=248.0,y=129.0)
-                map_widget.set_position(lat, lon)
-                map_widget.set_zoom(15)
+    try:
+        # Verifique se map_widget existe e destrua-o se necessário
+        if map_widget is not None:
+            map_widget.destroy()
+        
+        api_key_op = '46effc38253ccbfe1327746b4cbb41ef'
+        full_localidade = localidade_var.get().split(': ')[1]
+        if full_localidade and full_localidade != "Nenhuma":
+            cidade, pais = full_localidade.split(' - ')
+            url = f"https://api.weatherbit.io/v2.0/current?city={cidade}&country={pais}&key={API_KEY_WEATHER}"
+            response = requests.get(url)
+            if response.status_code == 200:
+                data = response.json()
+                if 'data' in data and len(data['data']) > 0:
+                    humidade = data['data'][0]['rh']
+                    cidade = data['data'][0]['city_name']
+                    lat = data['data'][0]['lat']
+                    lon = data['data'][0]['lon']
+                    map_widget = tkintermapview.TkinterMapView(root, width=257, height=247)
+                    map_widget.place(x=248.0, y=129.0)
+                    map_widget.set_position(lat, lon)
+                    map_widget.set_zoom(15)
+                else:
+                    resultado_var.set("Nenhum dado de humidade disponível para esta localidade.")
             else:
-                resultado_var.set("Nenhum dado de humidade disponível para esta localidade.")
-        else:
-            resultado_var.set(f"Erro ao buscar dados da API: {response.status_code}")
+                resultado_var.set(f"Erro ao buscar dados da API: {response.status_code}")
+    except Exception as e:
+        resultado_var.set(f"Ocorreu um erro ao tentar exibir o mapa: {e}")
 
 def destruir_mapa():
     global map_widget
     if map_widget:
         map_widget.destroy()
         map_widget = None
-         
+        
+def plot_graphs(times, temps, humidities, wind_speeds):
+    fig, axs = plt.subplots(3, 1, figsize=(10, 6))  # Ajuste a altura da figura para 6
+
+    # Format the x-axis to show only hours and minutes
+    time_format = plt.matplotlib.dates.DateFormatter('%H:%M')
+
+    # Plot temperature
+    axs[0].plot(times, temps, label='Temperature (°C)')
+    axs[0].set_title('Temperature over Time')
+    axs[0].set_xlabel('Time')
+    axs[0].set_ylabel('Temperature (°C)')
+    axs[0].xaxis.set_major_formatter(time_format)
+    axs[0].legend()
+    axs[0].grid(True)
+
+    # Plot humidity
+    axs[1].plot(times, humidities, label='Humidity (%)', color='orange')
+    axs[1].set_title('Humidity over Time')
+    axs[1].set_xlabel('Time')
+    axs[1].set_ylabel('Humidity (%)')
+    axs[1].xaxis.set_major_formatter(time_format)
+    axs[1].legend()
+    axs[1].grid(True)
+
+    # Plot wind speed
+    axs[2].plot(times, wind_speeds, label='Wind Speed (m/s)', color='green')
+    axs[2].set_title('Wind Speed over Time')
+    axs[2].set_xlabel('Time')
+    axs[2].set_ylabel('Wind Speed (m/s)')
+    axs[2].xaxis.set_major_formatter(time_format)
+    axs[2].legend()
+    axs[2].grid(True)
+
+    plt.tight_layout()
+    plt.show()
+
+def analyze_data():
+    global selected_day_data
+    if selected_day_data:
+        dia, img_path, day_of_week = selected_day_data
+        cidade, pais = localidade_var.get().split(': ')[1].split(' - ')
+        
+        # Obter latitude e longitude da API Weatherbit
+        url = f"https://api.weatherbit.io/v2.0/current?city={cidade}&country={pais}&key={API_KEY_WEATHER}"
+        response = requests.get(url)
+        if response.status_code == 200:
+            data = response.json()
+            if 'data' in data and len(data['data']) > 0:
+                lat = data['data'][0]['lat']
+                lon = data['data'][0]['lon']
+                
+                # Obter dados horários da API Open Meteo
+                date = dia['datetime']
+                start_date_str = date
+                end_date_str = (datetime.strptime(date, '%Y-%m-%d') + timedelta(days=1)).strftime('%Y-%m-%d')
+
+                url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&hourly=temperature_2m,relative_humidity_2m,windspeed_10m&start_date={start_date_str}&end_date={end_date_str}&timezone=auto"
+                response = requests.get(url)
+                if response.status_code == 200:
+                    data = response.json()
+                    if 'hourly' in data:
+                        times = [datetime.strptime(hour, '%Y-%m-%dT%H:%M').replace(tzinfo=None) for hour in data['hourly']['time']]
+                        temps = data['hourly']['temperature_2m']
+                        humidities = data['hourly']['relative_humidity_2m']
+                        wind_speeds = data['hourly']['windspeed_10m']
+                        plot_graphs(times, temps, humidities, wind_speeds)
+                    else:
+                        print("Nenhum dado horário disponível para esta localidade e data.")
+                else:
+                    print(f"Erro ao buscar dados da API Open Meteo: {response.status_code}")
+            else:
+                print("Nenhum dado de localização disponível para esta localidade.")
+        else:
+            print(f"Erro ao buscar dados da API Weatherbit: {response.status_code}")
+   
 def relative_to_assets(path: str) -> Path:
     return ASSETS_PATH / Path(path)
+
+def save_data():
+    global selected_day_data
+    if selected_day_data:
+        dia, img_path, day_of_week = selected_day_data
+        with open("weather_data.txt", 'a') as file:  # Abra o arquivo em modo de adição
+            file.write(f"Data: {dia['datetime']}\n")
+            file.write(f"Temperatura: {dia['temp']}°C\n")
+            file.write(f"Máxima: {dia['max_temp']}°C\n")
+            file.write(f"Mínima: {dia['min_temp']}°C\n")
+            file.write(f"Sensação: {dia['app_max_temp']}°C\n")
+            file.write(f"Clima: {dia['weather']['description']}\n")
+            file.write(f"Velocidade do Vento: {dia['wind_spd']} m/s\n")
+            file.write(f"Direção do Vento: {dia['wind_cdir']}\n")
+            file.write(f"Precipitação: {dia['precip']} mm\n")
+            file.write(f"Humidade: {dia['rh']}%\n")
+            file.write("\n")  # Adiciona uma linha em branco entre registros
+        print(f"Dados salvos em weather_data.txt")
+
+def load_data():
+    if os.path.exists("weather_data.txt"):
+        with open("weather_data.txt", 'r') as file:
+            data = file.read()
+        show_data(data)
+    else:
+        print(f"Arquivo weather_data.txt não encontrado.")
+
+def show_data(data):
+    data_window = ctk.CTkToplevel(root)
+    data_window.title("Dados do Tempo Salvos")
+    data_window.geometry("400x300")
+
+    text_widget = Text(data_window, wrap='word')
+    text_widget.pack(expand=True, fill='both')
+    text_widget.insert(END, data)
+
+
 
 root = ctk.CTk()
 root.title("Informações Meteorológicas")
@@ -669,19 +695,6 @@ country_list = ['BR', 'US', 'PT', 'ES', 'FR', 'DE', 'IT']
 
 fetch_initial_location()
 butoesfunction()
-
-
-# Adicionar as labels de localidade, temperatura máxima e mínima
-label_localidade = ctk.CTkLabel(root, textvariable=localidade_var, bg_color="#4DB1C7", fg_color="#4DB1C7", font=("Poppins Regular", 15))
-label_localidade.pack(side=tk.LEFT, anchor=tk.N, pady=20, padx=20)
-label_localidade.place(x=541.0, y=23.0)
-
-label_max_temp = ctk.CTkLabel(root, textvariable=tempmax_var, bg_color="#D9D9D9", fg_color="#D9D9D9", font=("Poppins Regular", 15))
-label_max_temp.place(x=601, y=279)
-
-label_min_temp = ctk.CTkLabel(root, textvariable=tempmin_var, bg_color="#D9D9D9", fg_color="#D9D9D9", font=("Poppins Regular", 15))
-label_min_temp.place(x=601, y=304)
-
 
 canvas = Canvas(
     root,
@@ -713,8 +726,8 @@ canvas.create_text(
 )
 
 canvas.create_text(
-    250.0,
-    436.0,
+    275.0,
+    438.0,
     anchor="nw",
     text="Fecha o mapa se quiseres que\n todos os dados apareçam",
     fill="#000000",
@@ -741,24 +754,22 @@ canvas.create_rectangle(
 
 lupa_image_1 = PhotoImage(
     file=relative_to_assets("button_1.png"))
-lupa_1 = Button(
+lupa_1 = ctk.CTkButton(
+    root,
+    text="",
     image=lupa_image_1,
-    bg="#4DB1C7",
-    borderwidth=0,
-    highlightthickness=0,
+    bg_color="#4DB1C7",
+    fg_color="#4DB1C7",
     command= set_localidade,
-    relief="flat"
+    width=39.0,
+    height=39.0
+    
 )
 lupa_1.place(
     x=720.0,
     y=20.0,
-    width=39.0,
-    height=39.0
 )
 
-label_localidade = ctk.CTkLabel(root,textvariable=localidade_var, bg_color="#4DB1C7",fg_color="#4DB1C7")
-label_localidade.pack(side=tk.LEFT, anchor=tk.N,pady=20,padx=20)
-label_localidade.place(x=541.0,y=23.0)
 
 canvas.create_text(
     17.0,
@@ -769,13 +780,6 @@ canvas.create_text(
     font=("Poppins Regular", 24 * -1)
 )
 
-image_image_1 = PhotoImage(
-    file=relative_to_assets("image_1.png"))
-image_1 = canvas.create_image(
-    40.99999078539349,
-    471.0,
-    image=image_image_1
-)
 
 email_image_9 = PhotoImage(
     file=relative_to_assets("button_9.png"))
@@ -801,7 +805,7 @@ button_10 = Button(
     bg="#466653",
     borderwidth=0,
     highlightthickness=0,
-    command=lambda: print("button_10 clicked"),
+    command=usar_email_selecionado,
 
 )
 button_10.place(
@@ -881,86 +885,47 @@ ocultar_button.place(
     y=450.0
 )
 
-button_image_14 = PhotoImage(
+salvardata_image_14 = PhotoImage(
     file=relative_to_assets("button_14.png"))
-button_14 = Button(
+salvardata_14 = Button(
     bg="#D9D9D9",
-    image=button_image_14,
+    image=salvardata_image_14,
     borderwidth=0,
     highlightthickness=0,
-    command=lambda: print("button_14 clicked"),
+    command=save_data,
     relief="flat"
 )
-button_14.place(
-    x=220.0,
+salvardata_14.place(
+    x=248.0,
     y=507.0,
     width=130.0,
     height=35.0
 )
 
-button_image_15 = PhotoImage(
+abridata_image_15 = PhotoImage(
     file=relative_to_assets("button_15.png"))
-button_15 = Button(
-    image=button_image_15,
+abridata_15 = Button(
+    image=abridata_image_15,
     bg="#D9D9D9",
     borderwidth=0,
     highlightthickness=0,
-    command=lambda: print("button_15 clicked"),
+    command=load_data,
     relief="flat"
 )
-button_15.place(
-    x=351.0,
+abridata_15.place(
+    x=379.0,
     y=507.0,
     width=130.0,
     height=35.0
 )
 
-
-
-
-# button_frame = ctk.CTkFrame(root, fg_color="blue")
-# button_frame.pack(side=tk.LEFT,anchor=W, pady=10)
-
-# framelocal= ctk.CTkFrame(root,fg_color="transparent")
-# framelocal.pack(side=tk.TOP,anchor=tk.NE, pady=10,padx=10)
-
-# btn_localidade = ctk.CTkButton(framelocal,text="Definir Localidade", command=set_localidade)
-# btn_localidade.pack(side=tk.RIGHT,anchor=tk.NE, pady=20)
-
-# # frametemp= ctk.CTkFrame(root,fg_color="transparent")
-# # frametemp.pack(side=tk.CENTER, pady=10,padx=10)
-
-# # btn_temperatura = ctk.CTkButton(button_frame, text="Temperatura", command=temperatura_action)
-# # btn_temperatura.grid(column=1,row=0, padx=5)
-
-# # btn_humidade = ctk.CTkButton(button_frame, text="Humidade", command=get_humidade)
-# # btn_humidade.grid(column=1,row=1, padx=5)
-
-# # btn_vv = ctk.CTkButton(button_frame, text="Velocidade do Vento", command=get_velocidade)
-# # btn_vv.grid(column=1,row=2,padx=5)
-
-# btn_show_graph = ctk.CTkButton(root, text="Mostrar Gráfico de Temperaturas", command=show_temperature_graph)
-# btn_show_graph.pack(pady=10)
-
-# btn_prev = ctk.CTkButton(root, text="Previsão de Temperatura", command=previsao_temperatura)
-# btn_prev.pack(pady=10)
+analyze_button = ctk.CTkButton(root, text="Analisar Dados", command=analyze_data,width=210, height=35, bg_color="#D9D9D9", fg_color="#37A376", font=("Poppins Regular", 14),corner_radius=25)
+analyze_button.place(x=557, y=500)
 
 label_localidade = ctk.CTkLabel(root,textvariable=localidade_var,bg_color="#4DB1C7",fg_color="#4DB1C7",font=("Poppins Regular",15))
 label_localidade.pack(side=tk.LEFT, anchor=tk.N,pady=20,padx=20)
-label_localidade.place(x=541.0,y=23.0)
+label_localidade.place(x=500.0,y=20.0)
 
-# label_resultado = ctk.CTkLabel(root, textvariable=resultado_var)
-# label_resultado.pack(side=tk.TOP, anchor=tk.N, pady=20)
-# label_resultado.place(x=541.0,y=23.0)
-
-# btn_aviso = ctk.CTkButton(root, text="⚠️Avisar desastres!⚠️", command=usar_email_selecionado, fg_color="red")
-# btn_aviso.pack(side=ctk.BOTTOM, anchor=tk.SE, pady=10, padx=10)
-
-# btn_email = ctk.CTkButton(root, text="Inserir email", command=emailconfirma, fg_color="green")
-# btn_email.pack(side=tk.BOTTOM, anchor=tk.SE, pady=10, padx=10)
-
-# btn_mapa = ctk.CTkButton(root, text="Abrir Mapa", command=mapa, fg_color="green")
-# btn_mapa.pack(side=tk.BOTTOM, anchor=tk.SE, pady=10, padx=10)
 
 def on_close():
     if messagebox.askokcancel("Fechar", "Minimizar invés de fechar totalmente?"):
